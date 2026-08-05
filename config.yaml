@@ -1,0 +1,23 @@
+# Edu's Newsletter Podcast — pipeline config
+
+elevenlabs:
+  voice_id: "4irAvSX8mmKXcioIIREn"   # Edu's Newsletter — Professional Voice Clone
+  model_id: "eleven_multilingual_v2"        # good default for English narration
+  stability: 0.7
+  similarity_boost: 0.8
+  style: 0.15
+  use_speaker_boost: true
+  chunk_char_limit: 2500                    # split long scripts into safe request sizes
+
+anthropic:
+  model: "claude-sonnet-4-6"
+  max_tokens: 4096
+
+podcast:
+  show_name: "Edu's Newsletter Podcast"
+  intro_asset: "assets/intro.wav"
+  outro_asset: "assets/outro.wav"
+  output_dir: "output"
+
+paths:
+  source_dir: "content/source_reports"

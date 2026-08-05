@@ -1,0 +1,39 @@
+name: Weekly Podcast Generation
+
+on:
+  schedule:
+    # Every Monday at 09:00 UTC (adjust as needed — this is ~06:00 São Paulo time)
+    - cron: "0 9 * * 1"
+  workflow_dispatch: {}   # allows manual trigger from the Actions tab
+
+jobs:
+  generate-episode:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies (ffmpeg for audio assembly)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run podcast pipeline
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        run: python src/pipeline.py
+
+      - name: Commit generated episode back to repo
+        run: |
+          git config user.name "podcast-bot"
+          git config user.email "actions@github.com"
+          git add output/ content/generated_scripts/ content/source_reports/.processed.txt
+          git diff --quiet && git diff --staged --quiet || git commit -m "Auto-generate weekly episode [skip ci]"
+          git push

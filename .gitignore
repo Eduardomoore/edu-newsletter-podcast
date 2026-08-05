@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+
+# Keep generated audio out of git by default if you'd rather host it elsewhere.
+# Comment these out if you WANT episodes committed to the repo (needed for the
+# GitHub Actions auto-commit step to work as configured).
+# output/*.mp3
+# output/chunks/

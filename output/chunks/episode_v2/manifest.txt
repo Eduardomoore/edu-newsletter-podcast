@@ -1,0 +1,9 @@
+output/chunks/episode_v2/chap01_01.mp3
+output/chunks/episode_v2/chap02_01.mp3
+output/chunks/episode_v2/chap03_01.mp3
+output/chunks/episode_v2/chap04_01.mp3
+output/chunks/episode_v2/chap05_01.mp3
+output/chunks/episode_v2/chap05_02.mp3
+output/chunks/episode_v2/chap06_01.mp3
+output/chunks/episode_v2/chap07_01.mp3
+output/chunks/episode_v2/chap08_01.mp3
