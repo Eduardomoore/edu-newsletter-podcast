@@ -17,6 +17,8 @@ podcast:
   show_name: "Edu's Newsletter Podcast"
   intro_asset: "assets/intro.wav"
   outro_asset: "assets/outro.wav"
+  about_me_asset: "assets/about_me.mp3"
+  about_me_episodes_remaining: 5
   output_dir: "output"
 
 paths:

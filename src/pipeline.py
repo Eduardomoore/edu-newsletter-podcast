@@ -5,7 +5,7 @@ Orchestrates the full weekly pipeline:
   1. Pick the newest report in content/source_reports/ that hasn't been processed
   2. Clean it into a spoken script (Claude API)
   3. Generate narrated audio per chapter (ElevenLabs API, cloned voice)
-  4. Assemble into a final episode MP3 with intro/outro
+  4. Assemble into a final episode MP3 with intro/outro (and About Me, if active)
 
 Designed to be run manually or via the weekly GitHub Actions workflow.
 """
@@ -14,6 +14,7 @@ import os
 import sys
 import glob
 import datetime
+import yaml
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -111,6 +112,14 @@ def main():
     # Step 3: assemble final episode
     print("Step 3/3: Assembling final episode...")
     final_path = assemble(manifest_path, cfg, episode_name)
+
+    # Decrement the About Me segment counter, if active
+    remaining = cfg["podcast"].get("about_me_episodes_remaining", 0)
+    if remaining > 0:
+        cfg["podcast"]["about_me_episodes_remaining"] = remaining - 1
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
+        print(f"About Me segment countdown updated: {remaining - 1} episode(s) remaining.")
 
     mark_processed(os.path.basename(report_path))
     print(f"\nDone! Episode ready: {final_path}")

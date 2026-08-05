@@ -2,8 +2,10 @@
 assemble_audio.py
 
 Stitches generated TTS chunks (in manifest order) together with intro/outro
-bumpers into a single final episode MP3. Adds a short silence between
-chapters for natural pacing.
+bumpers into a single final episode MP3. Optionally inserts a reusable
+"About Me" segment after the intro, for a limited number of upcoming
+episodes (controlled by about_me_episodes_remaining in config.yaml).
+Adds a short silence between chapters for natural pacing.
 """
 
 import os
@@ -30,6 +32,13 @@ def assemble(manifest_path: str, cfg: dict, episode_name: str):
     if intro_path and os.path.exists(intro_path):
         episode += AudioSegment.from_file(intro_path)
         episode += AudioSegment.silent(duration=800)
+
+    about_me_path = cfg["podcast"].get("about_me_asset")
+    about_me_remaining = cfg["podcast"].get("about_me_episodes_remaining", 0)
+    if about_me_path and os.path.exists(about_me_path) and about_me_remaining > 0:
+        episode += AudioSegment.from_file(about_me_path)
+        episode += AudioSegment.silent(duration=800)
+        print(f"Included About Me segment ({about_me_remaining} episode(s) remaining after this one: {about_me_remaining - 1})")
 
     for path in chunk_paths:
         episode += AudioSegment.from_file(path)
