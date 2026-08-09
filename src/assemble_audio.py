@@ -2,10 +2,15 @@
 assemble_audio.py
 
 Stitches generated TTS chunks (in manifest order) together with intro/outro
-bumpers into a single final episode MP3. Optionally inserts a reusable
-"About Me" segment after the intro, for a limited number of upcoming
-episodes (controlled by about_me_episodes_remaining in config.yaml).
-Adds a short silence between chapters for natural pacing.
+bumpers into a single final episode MP3.
+
+Play order:
+  1. intro bumper
+  2. one-time opener (only if one_time_opener_asset is set)
+  3. About Me segment (while about_me_episodes_remaining > 0)
+  4. chapter audio
+  5. spoken outro
+  6. outro music
 """
 
 import os
@@ -20,12 +25,10 @@ def load_config(config_path: str) -> dict:
 
 
 def assemble(manifest_path: str, cfg: dict, episode_name: str):
-    audio_dir = os.path.dirname(manifest_path)
-
     with open(manifest_path, "r", encoding="utf-8") as f:
         chunk_paths = [line.strip() for line in f if line.strip()]
 
-    silence = AudioSegment.silent(duration=600)  # 0.6s between chunks
+    silence = AudioSegment.silent(duration=600)
     episode = AudioSegment.empty()
 
     intro_path = cfg["podcast"].get("intro_asset")
@@ -33,20 +36,32 @@ def assemble(manifest_path: str, cfg: dict, episode_name: str):
         episode += AudioSegment.from_file(intro_path)
         episode += AudioSegment.silent(duration=800)
 
+    opener_path = cfg["podcast"].get("one_time_opener_asset")
+    if opener_path and os.path.exists(opener_path):
+        episode += AudioSegment.from_file(opener_path)
+        episode += AudioSegment.silent(duration=800)
+        print(f"Included one-time opener: {opener_path}")
+
     about_me_path = cfg["podcast"].get("about_me_asset")
     about_me_remaining = cfg["podcast"].get("about_me_episodes_remaining", 0)
     if about_me_path and os.path.exists(about_me_path) and about_me_remaining > 0:
         episode += AudioSegment.from_file(about_me_path)
         episode += AudioSegment.silent(duration=800)
-        print(f"Included About Me segment ({about_me_remaining} episode(s) remaining after this one: {about_me_remaining - 1})")
+        print(f"Included About Me segment ({about_me_remaining - 1} episode(s) remaining after this one)")
 
     for path in chunk_paths:
         episode += AudioSegment.from_file(path)
         episode += silence
 
+    outro_voice_path = cfg["podcast"].get("outro_voice_asset")
+    if outro_voice_path and os.path.exists(outro_voice_path):
+        episode += AudioSegment.silent(duration=600)
+        episode += AudioSegment.from_file(outro_voice_path)
+        print(f"Included spoken outro: {outro_voice_path}")
+
     outro_path = cfg["podcast"].get("outro_asset")
     if outro_path and os.path.exists(outro_path):
-        episode += AudioSegment.silent(duration=400)
+        episode += AudioSegment.silent(duration=600)
         episode += AudioSegment.from_file(outro_path)
 
     output_dir = cfg["podcast"].get("output_dir", "output")
