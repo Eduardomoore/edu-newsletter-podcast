@@ -3,7 +3,7 @@
 Turns a written LatAm fintech research report into a finished, narrated podcast
 episode. Runs weekly on a schedule with no manual steps.
 
-**Listen:** [Edu's Podcast on Spotify](Shttps://open.spotify.com/episode/1xsat7IJeH4bBh2rY2w2fy?si=cakB_zbGQ1e61EGwMx9D0Q)
+**Listen:** [Edu's Podcast on Spotify](https://open.spotify.com/episode/1xsat7IJeH4bBh2rY2w2fy?si=cakB_zbGQ1e61EGwMx9D0Q)
 **Read:** [Edu's Newsletter on Substack](https://substack.com/@eduardomoore)
 
 Built with the ElevenLabs API (Professional Voice Cloning + text-to-speech) and the
