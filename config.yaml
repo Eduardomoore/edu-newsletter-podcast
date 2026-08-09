@@ -18,7 +18,6 @@ podcast:
   intro_asset: "assets/intro.wav"
   outro_voice_asset: "assets/outro_voice.mp3"
   outro_asset: "assets/outro.wav"
-  one_time_opener_asset: "assets/episode1_opener.mp3"
   about_me_asset: "assets/about_me.mp3"
   about_me_episodes_remaining: 5
   output_dir: "output"
