@@ -3,11 +3,16 @@
 elevenlabs:
   voice_id: "4irAvSX8mmKXcioIIREn"   # Edu's Newsletter — Professional Voice Clone
   model_id: "eleven_multilingual_v2"        # good default for English narration
-  stability: 0.7
+  stability: 0.78                           # nudged up from 0.7 -- more literal adherence to
+                                             # punctuation/pacing cues, small trade-off in expressiveness
   similarity_boost: 0.8
-  style: 0.15
+  style: 0.1                                # nudged down from 0.15 -- style pulls toward learned
+                                             # delivery patterns, which is part of what overrides periods
   use_speaker_boost: true
-  chunk_char_limit: 2500                    # split long scripts into safe request sizes
+  chunk_char_limit: 900                     # ElevenLabs' own guidance: quality/consistency degrades
+                                             # past ~800-900 chars per request; 2500 was too large
+  apply_text_normalization: "on"            # force normalization on instead of "auto" deciding per-request
+  seed: 42                                  # best-effort determinism -- lets you reproduce a good take
 
 anthropic:
   model: "claude-sonnet-4-6"
@@ -20,6 +25,10 @@ podcast:
   outro_asset: "assets/outro.wav"
   about_me_asset: "assets/about_me.mp3"
   about_me_episodes_remaining: 5
+  about_me_intro_text: "Before we get into it, a quick word about who's talking to you."
+  about_me_intro_asset: "assets/about_me_intro.mp3"   # narrated once, then reused every episode
+                                                        # -- edit the text above and delete this
+                                                        # file to re-narrate it
   output_dir: "output"
 
 paths:

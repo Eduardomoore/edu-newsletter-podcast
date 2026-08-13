@@ -36,6 +36,16 @@ def assemble(manifest_path: str, cfg: dict, episode_name: str):
         episode += AudioSegment.from_file(intro_path)
         episode += AudioSegment.silent(duration=800)
 
+    # Per-episode welcome/summary line ("Welcome to Edu's Podcast, in today's
+    # edition..."), generated fresh each run by tts_generate.py/pipeline.py
+    # from the script's "## Welcome" section. Lives right next to the
+    # episode's chapter chunks, one directory up from this manifest.
+    welcome_path = os.path.join(os.path.dirname(manifest_path), "welcome.mp3")
+    if os.path.exists(welcome_path):
+        episode += AudioSegment.from_file(welcome_path)
+        episode += AudioSegment.silent(duration=800)
+        print(f"Included per-episode welcome/summary: {welcome_path}")
+
     opener_path = cfg["podcast"].get("one_time_opener_asset")
     if opener_path and os.path.exists(opener_path):
         episode += AudioSegment.from_file(opener_path)
@@ -45,6 +55,11 @@ def assemble(manifest_path: str, cfg: dict, episode_name: str):
     about_me_path = cfg["podcast"].get("about_me_asset")
     about_me_remaining = cfg["podcast"].get("about_me_episodes_remaining", 0)
     if about_me_path and os.path.exists(about_me_path) and about_me_remaining > 0:
+        about_me_intro_path = cfg["podcast"].get("about_me_intro_asset")
+        if about_me_intro_path and os.path.exists(about_me_intro_path):
+            episode += AudioSegment.from_file(about_me_intro_path)
+            episode += AudioSegment.silent(duration=500)
+            print(f"Included About Me intro line: {about_me_intro_path}")
         episode += AudioSegment.from_file(about_me_path)
         episode += AudioSegment.silent(duration=800)
         print(f"Included About Me segment ({about_me_remaining - 1} episode(s) remaining after this one)")

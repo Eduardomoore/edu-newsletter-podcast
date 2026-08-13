@@ -19,7 +19,14 @@ import yaml
 sys.path.insert(0, os.path.dirname(__file__))
 
 from script_cleanup import clean_report_to_script  # noqa: E402
-from tts_generate import load_config as load_tts_config, split_into_chapters, chunk_text, generate_audio_chunk  # noqa: E402
+from tts_generate import (  # noqa: E402
+    load_config as load_tts_config,
+    split_into_chapters,
+    chunk_text,
+    generate_audio_chunk,
+    extract_welcome,
+    ensure_static_asset,
+)
 from assemble_audio import assemble  # noqa: E402
 
 
@@ -94,16 +101,37 @@ def main():
     audio_chunks_dir = os.path.join("output", "chunks", episode_name)
     os.makedirs(audio_chunks_dir, exist_ok=True)
 
+    welcome_text, script = extract_welcome(script)
+    if welcome_text:
+        welcome_path = os.path.join(audio_chunks_dir, "welcome.mp3")
+        print("  Generating welcome / episode summary...")
+        generate_audio_chunk(welcome_text, elevenlabs_key, cfg, welcome_path, next_text=script[:500])
+
+    about_me_intro_text = cfg.get("podcast", {}).get("about_me_intro_text")
+    about_me_intro_path = cfg.get("podcast", {}).get("about_me_intro_asset")
+    if about_me_intro_text and about_me_intro_path:
+        ensure_static_asset(about_me_intro_text, elevenlabs_key, cfg, about_me_intro_path)
+
     chapters = split_into_chapters(script)
-    limit = cfg["elevenlabs"].get("chunk_char_limit", 2500)
-    manifest = []
+    limit = cfg["elevenlabs"].get("chunk_char_limit", 900)
+
+    flat = []
     for chap_idx, (title, body) in enumerate(chapters, start=1):
         for chunk_idx, chunk in enumerate(chunk_text(body, limit), start=1):
-            filename = f"chap{chap_idx:02d}_{chunk_idx:02d}.mp3"
-            out_path = os.path.join(audio_chunks_dir, filename)
+            flat.append((chap_idx, chunk_idx, title, chunk))
+
+    manifest = []
+    for i, (chap_idx, chunk_idx, title, chunk) in enumerate(flat):
+        filename = f"chap{chap_idx:02d}_{chunk_idx:02d}.mp3"
+        out_path = os.path.join(audio_chunks_dir, filename)
+        if os.path.exists(out_path):
+            print(f"  Skipping (already generated): {out_path}")
+        else:
+            prev_text = flat[i - 1][3] if i > 0 else None
+            next_text = flat[i + 1][3] if i + 1 < len(flat) else None
             print(f"  Chapter {chap_idx} ('{title}') chunk {chunk_idx}...")
-            generate_audio_chunk(chunk, elevenlabs_key, cfg, out_path)
-            manifest.append(out_path)
+            generate_audio_chunk(chunk, elevenlabs_key, cfg, out_path, previous_text=prev_text, next_text=next_text)
+        manifest.append(out_path)
 
     manifest_path = os.path.join(audio_chunks_dir, "manifest.txt")
     with open(manifest_path, "w", encoding="utf-8") as f:

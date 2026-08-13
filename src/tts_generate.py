@@ -43,6 +43,31 @@ def split_into_chapters(script_text: str):
     return chapters
 
 
+def extract_welcome(script_text: str):
+    """Pull an optional leading '## Welcome' section out of the script.
+
+    script_cleanup.py writes this section when present -- a short, per-episode
+    "Welcome to Edu's Podcast, in today's edition..." line that previews what
+    the episode covers. It has to be regenerated every episode (unlike the
+    other bumpers) because its content depends on the article. Returns
+    (welcome_text_or_None, script_text_with_welcome_section_removed).
+    """
+    pattern = re.compile(r"^##\s*Welcome\s*$", re.MULTILINE)
+    match = pattern.search(script_text)
+    if not match:
+        return None, script_text
+
+    rest = script_text[match.end():]
+    next_header = re.search(r"^##\s", rest, re.MULTILINE)
+    if next_header:
+        welcome_text = rest[:next_header.start()].strip()
+        remaining = script_text[:match.start()] + rest[next_header.start():]
+    else:
+        welcome_text = rest.strip()
+        remaining = script_text[:match.start()]
+    return (welcome_text or None), remaining
+
+
 def chunk_text(text: str, limit: int):
     """Split text into chunks under `limit` characters, breaking on sentence ends."""
     if len(text) <= limit:
@@ -62,7 +87,8 @@ def chunk_text(text: str, limit: int):
     return chunks
 
 
-def generate_audio_chunk(text: str, api_key: str, cfg: dict, out_path: str, retries: int = 3):
+def generate_audio_chunk(text: str, api_key: str, cfg: dict, out_path: str, retries: int = 3,
+                          previous_text: str = None, next_text: str = None):
     url = ELEVENLABS_TTS_URL.format(voice_id=cfg["elevenlabs"]["voice_id"])
     headers = {
         "xi-api-key": api_key,
@@ -78,7 +104,29 @@ def generate_audio_chunk(text: str, api_key: str, cfg: dict, out_path: str, retr
             "style": cfg["elevenlabs"].get("style", 0.0),
             "use_speaker_boost": cfg["elevenlabs"].get("use_speaker_boost", True),
         },
+        # Text normalization "on" (vs "auto") makes ElevenLabs apply its
+        # normalizer deterministically instead of deciding per-request whether
+        # to run it -- one source of the "sometimes" behavior you're seeing.
+        "apply_text_normalization": cfg["elevenlabs"].get("apply_text_normalization", "on"),
     }
+
+    # Request Stitching: tells the model what came immediately before/after
+    # this chunk so it doesn't have to guess the prosody at the seam. This is
+    # the main fix for periods occasionally landing as comma-length pauses --
+    # without it, every chunk is synthesized as if it were a standalone
+    # sentence with no sense of where it sits in the paragraph.
+    if previous_text:
+        payload["previous_text"] = previous_text[-500:]
+    if next_text:
+        payload["next_text"] = next_text[:500]
+
+    # Optional: pin a seed so that once a take sounds right, re-running the
+    # same chunk (e.g. to fix one bad line) reproduces it rather than
+    # re-rolling the dice. ElevenLabs notes this is "best effort," not a hard
+    # guarantee, but it noticeably cuts down on run-to-run variance.
+    seed = cfg["elevenlabs"].get("seed")
+    if seed is not None:
+        payload["seed"] = seed
 
     for attempt in range(1, retries + 1):
         response = requests.post(url, json=payload, headers=headers, timeout=120)
@@ -90,6 +138,21 @@ def generate_audio_chunk(text: str, api_key: str, cfg: dict, out_path: str, retr
         time.sleep(2 * attempt)
 
     raise RuntimeError(f"Failed to generate audio for chunk after {retries} attempts")
+
+
+def ensure_static_asset(text: str, api_key: str, cfg: dict, out_path: str):
+    """Generate a one-off narration line only if it doesn't already exist.
+
+    Used for recurring bumper lines (like the About Me intro) that stay the
+    same every episode -- so they get narrated once and reused, instead of
+    re-billing ElevenLabs for the same ten words every week.
+    """
+    if os.path.exists(out_path):
+        print(f"Static asset already exists, skipping: {out_path}")
+        return
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    print(f"Generating static asset (first time only): {out_path}")
+    generate_audio_chunk(text, api_key, cfg, out_path)
 
 
 def main():
@@ -111,18 +174,48 @@ def main():
     with open(script_path, "r", encoding="utf-8") as f:
         script_text = f.read()
 
-    chapters = split_into_chapters(script_text)
-    limit = cfg["elevenlabs"].get("chunk_char_limit", 2500)
+    # Per-episode welcome/summary line, if script_cleanup.py generated one
+    welcome_text, script_text = extract_welcome(script_text)
+    if welcome_text:
+        welcome_path = os.path.join(output_dir, "welcome.mp3")
+        print("Generating: Welcome / episode summary")
+        generate_audio_chunk(welcome_text, api_key, cfg, welcome_path, next_text=script_text[:500])
 
-    manifest = []
+    # Recurring "before we get into it, a word about who's talking to you"
+    # line -- narrated once, then reused every episode. Edit the wording in
+    # config.yaml's podcast.about_me_intro_text; delete the cached mp3 at
+    # podcast.about_me_intro_asset to force a re-narration.
+    about_me_intro_text = cfg.get("podcast", {}).get("about_me_intro_text")
+    about_me_intro_path = cfg.get("podcast", {}).get("about_me_intro_asset")
+    if about_me_intro_text and about_me_intro_path:
+        ensure_static_asset(about_me_intro_text, api_key, cfg, about_me_intro_path)
+
+    chapters = split_into_chapters(script_text)
+    limit = cfg["elevenlabs"].get("chunk_char_limit", 900)
+
+    # Flatten every chapter's chunks into one ordered list first, so each
+    # chunk can be given the real chunk immediately before and after it as
+    # previous_text/next_text -- including across chapter boundaries. This is
+    # what keeps a period from occasionally reading as a comma-length pause:
+    # each request now knows it isn't the start or end of the world.
+    flat = []  # (chap_idx, chunk_idx, title, text)
     for chap_idx, (title, body) in enumerate(chapters, start=1):
         chunks = chunk_text(body, limit)
         for chunk_idx, chunk in enumerate(chunks, start=1):
-            filename = f"chap{chap_idx:02d}_{chunk_idx:02d}.mp3"
-            out_path = os.path.join(output_dir, filename)
-            print(f"Generating: Chapter {chap_idx} ('{title}') chunk {chunk_idx}/{len(chunks)}")
-            generate_audio_chunk(chunk, api_key, cfg, out_path)
-            manifest.append(out_path)
+            flat.append((chap_idx, chunk_idx, title, chunk))
+
+    manifest = []
+    for i, (chap_idx, chunk_idx, title, chunk) in enumerate(flat):
+        filename = f"chap{chap_idx:02d}_{chunk_idx:02d}.mp3"
+        out_path = os.path.join(output_dir, filename)
+        if os.path.exists(out_path):
+            print(f"Skipping (already generated): {out_path}")
+        else:
+            prev_text = flat[i - 1][3] if i > 0 else None
+            next_text = flat[i + 1][3] if i + 1 < len(flat) else None
+            print(f"Generating: Chapter {chap_idx} ('{title}') chunk {chunk_idx}")
+            generate_audio_chunk(chunk, api_key, cfg, out_path, previous_text=prev_text, next_text=next_text)
+        manifest.append(out_path)
 
     manifest_path = os.path.join(output_dir, "manifest.txt")
     with open(manifest_path, "w", encoding="utf-8") as f:
