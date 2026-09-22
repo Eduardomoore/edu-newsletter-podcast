@@ -16,7 +16,7 @@ elevenlabs:
 
 anthropic:
   model: "claude-sonnet-4-6"
-  max_tokens: 4096
+  max_tokens: 16000
 
 podcast:
   show_name: "Edu's Newsletter Podcast"
